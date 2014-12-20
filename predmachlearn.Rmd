@@ -1,0 +1,112 @@
+
+## Practical Machine Learning: Predicting Human Activity
+
+Authored By: Eric Lim B G, Authored Date: 21-Dec-14  
+GitHub Repo @ https://github.com/EricLimBG/predmachlearn-016
+
+------------------------------------------------------------------------------
+
+#### Introduction
+
+It is now possible to use wearable devices to collect large amount of data about personal activity relatively inexpensively. These type of devices can quantify how much of a particular activity a person does. This project uses data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants performing barbell lifts correctly and incorrectly in 5 different ways. More information is available in the Weight Lifting Exercise Dataset section from the [website](http://groupware.les.inf.puc-rio.br/har).
+
+This project uses two datasets, the training and the testing. The training dataset (*19622* cases) is used to build a predictive model with "classe" (i.e. *A, B, C, D & E*) as the target/outcome variable. The predictive model is then used to make predictions on the testing dataset (*20* cases).
+
+------------------------------------------------------------------------------
+
+#### Loading and Preprocessing the Data
+First, we load the necessary R libraries (e.g. caret) and functions for this project. Then, we load data from the CSV files into the training and testing dataset, standardizing empty and null values as NAs in the process.
+```{r echo=TRUE}
+library(caret)
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+training <- read.csv("data/pml-training.csv",na.strings=c("","NA","NULL"))
+testing <- read.csv("data/pml-testing.csv",na.strings=c("","NA","NULL"))
+```
+
+------------------------------------------------------------------------------
+
+#### Exploring and Cleaning the Data
+Initial exploration reviewed that there are *19622* cases in the training dataset and *20* cases in the testing dataset with *160* variables each.
+```{r}
+rbind(c("training",dim(training)),
+      c("testing",dim(testing)))
+```
+
+To reduce the number of variables, we filter off those that contains NA in their values.
+```{r}
+training <- training[,colSums(is.na(training))==0]
+testing <- testing[,colSums(is.na(testing))==0]
+```
+
+Next, we also remove variables which are ID, timestamp or flag related.
+```{r}
+training <- training[, c(7:60)]
+testing <- testing[, c(7:60)]
+```
+
+*The same cleasing procedure was performed on both the training and testing dataset to eliminate potential bias caused by unstandardised data.*
+
+```{r}
+rbind(names(training),names(testing))
+```
+
+*The final two datasets contains 53 variables each, with the training dataset having "classe" as its target variable and the testing dataset having "problem_id" to identify the case that will be predicted later on.*
+
+------------------------------------------------------------------------------
+
+#### Building the Predictive Model
+  
+##### Data Partitioning
+
+Before building the model, we first partition the training dataset in a ratio of 60% for training and 40% for testing the model.
+```{r}
+# partition training dataset (60/40)
+partition <- createDataPartition(y=training$classe,
+                                 p=0.60,list=FALSE)
+train60 <- training[partition,] # 60% for training model
+test40 <- training[-partition,] # 40% for testing model
+```
+
+##### Modeling and Cross Validations
+
+As the target, "classe" is a categorical variable, the random forests machine learning method is selected. 4-fold cross validation was also performed to eliminate overfitting and ensure a generalised model.
+```{r}
+set.seed(22) # ensure reproduciblility
+# traing the model with cross validation
+predmodel <- train(classe~.,data=train60, method="rf",prox=TRUE,trControl=trainControl(method="cv",number=4,allowParallel=TRUE))
+# display model statistics
+print(predmodel)
+```
+
+##### Out of Sample Accuracy
+
+We ran the built model against the 40% testing partition to calculate the out of sample accuracy of the model.
+```{r}
+# testing the built model
+test40_classe <- predict(predmodel,test40)
+# display accuracy of built model
+confusionMatrix(test40_classe,test40$classe)
+```
+
+*From the confusion matrix, we witnessed low out of sample errors and high overall accuracy of more than **99%**, indicating that the model built is robust.*
+
+------------------------------------------------------------------------------
+
+#### Making Predictions
+
+Using the random forests model built above, we provide answers for the 20 test cases of the testing dataset.
+```{r}
+# making predictions of the built model
+testing_classe <- predict(predmodel,testing)
+pml_write_files(testing_classe) # write answers to files
+as.character(testing_classe)    # display answers
+```
+
+------------------------------------------------------------------------------
